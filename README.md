@@ -27,6 +27,32 @@
 - **DeepResearch**: Multi-turn research process that thoroughly investigates complex topics
 - **Multiple Model Providers**: Support for Google Gemini, OpenAI, OpenRouter, and local Ollama models
 
+## Development Environment using Dev Containers
+
+This project includes a [Dev Container](https://code.visualstudio.com/docs/devcontainers/containers) configuration, which allows you to use a Docker container as a full-featured development environment. It ensures a consistent and reproducible setup for all contributors.
+
+### Prerequisites
+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running.
+- [Visual Studio Code](https://code.visualstudio.com/) installed.
+- The [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) installed in VS Code.
+
+### Getting Started with Dev Containers
+
+1.  Clone this repository to your local machine.
+2.  Open the cloned repository folder in VS Code.
+3.  VS Code should automatically detect the `.devcontainer/devcontainer.json` configuration and prompt you with a message like: "Folder contains a Dev Container configuration file. Reopen folder to develop in a container?"
+4.  Click "Reopen in Container". VS Code will build the dev container image (if it's the first time) and then connect to it.
+
+Once the container is built and VS Code has connected, you'll be developing *inside* the container, with all dependencies and tools pre-installed and configured according to the `devcontainer.json` file. The terminal in VS Code will also be connected to the container's shell.
+
+### Benefits
+
+-   **Consistency:** Everyone uses the same OS, dependencies, and tool versions.
+-   **Pre-configured:** Python, Node.js, relevant VS Code extensions, and linters are set up.
+-   **Isolation:** Your local machine's environment is not affected.
+-   **Easy Onboarding:** New contributors can get started quickly without complex local setup.
+
 ## 🚀 Quick Start (Super Easy!)
 
 ### Option 1: Using Docker

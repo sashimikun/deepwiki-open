@@ -1,0 +1,62 @@
+{
+  "name": "DeepWiki Dev Container",
+  "dockerComposeFile": [
+    "../docker-compose.yml" // Adjusted path to be relative to .devcontainer folder
+  ],
+  "service": "app", // Assuming 'app' is the main service in your docker-compose.yml
+  "workspaceFolder": "/app",
+  // Configure features for the container.
+  "features": {
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.11"
+    },
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20"
+    }
+  },
+  // Add the IDs of extensions you want installed when the container is created.
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "esbenp.prettier-vscode",
+        "dbaeumer.vscode-eslint",
+        "ms-azuretools.vscode-docker",
+        "streetsidesoftware.code-spell-checker",
+        "mhutchie.git-graph",
+        "github.vscode-github-actions"
+      ],
+      "settings": {
+        "terminal.integrated.shell.linux": "/bin/bash",
+        "python.defaultInterpreterPath": "/opt/venv/bin/python",
+        "python.linting.pylintEnabled": true,
+        "python.linting.enabled": true,
+        "editor.formatOnSave": true,
+        "[python]": {
+          "editor.defaultFormatter": "ms-python.black-formatter",
+          "editor.codeActionsOnSave": {
+            "source.organizeImports": "explicit"
+          }
+        },
+        "[javascript]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        },
+        "[typescript]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        },
+        "[json]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        }
+      }
+    }
+  },
+  // Use 'forwardPorts' to make a list of ports inside the container available locally.
+  "forwardPorts": [3000, 8001],
+  // Use 'postCreateCommand' to run commands after the container is created.
+  "postCreateCommand": "sudo chown node /app && su node -c 'npm install && (cd api && pip install --no-cache-dir -r requirements.txt)'",
+  // "postCreateCommand": "npm install && (cd api && pip install --no-cache-dir -r requirements.txt)",
+  // Comment out connectAsUser. More info: https://aka.ms/vscode-remote/containers/non-root.
+  "remoteUser": "node" // Running as non-root user 'node'
+  // "remoteUser": "vscode"
+}
