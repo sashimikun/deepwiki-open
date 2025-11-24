@@ -18,11 +18,13 @@ logger = logging.getLogger(__name__)
 # Try to import cocoindex for advanced text splitting
 try:
     import cocoindex
+    # cocoindex is available but its functions are designed for flow-based usage
+    # We'll use it when we can integrate with the flow API
     COCOINDEX_AVAILABLE = True
-    logger.info("cocoindex is available for text splitting")
+    logger.info("cocoindex is available")
 except ImportError:
     COCOINDEX_AVAILABLE = False
-    logger.warning("cocoindex not available, using fallback text splitter")
+    logger.warning("cocoindex not available")
 
 
 def get_default_root_path() -> str:
@@ -67,37 +69,10 @@ class TextSplitter:
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
         self.language = language
-        self._use_cocoindex = COCOINDEX_AVAILABLE
+        # cocoindex functions are designed for flow-based usage, using custom implementation
+        self._use_cocoindex = False
 
-    def _split_with_cocoindex(self, text: str) -> List[str]:
-        """
-        Split text using cocoindex's SplitRecursively function.
-
-        cocoindex.functions.SplitRecursively intelligently splits text by trying
-        higher-level boundaries first (sections, paragraphs) before falling back
-        to lower-level boundaries (sentences, words).
-        """
-        try:
-            # Use cocoindex's SplitRecursively function
-            split_fn = cocoindex.functions.SplitRecursively(
-                chunk_size=self.chunk_size,
-                chunk_overlap=self.chunk_overlap,
-            )
-            # Apply the transformation
-            chunks = split_fn(text, language=self.language)
-
-            # Handle the result - cocoindex may return different formats
-            if isinstance(chunks, list):
-                return [str(chunk) for chunk in chunks]
-            elif hasattr(chunks, '__iter__'):
-                return [str(chunk) for chunk in chunks]
-            else:
-                return [str(chunks)]
-        except Exception as e:
-            logger.warning(f"cocoindex SplitRecursively failed: {e}, falling back to simple split")
-            return self._split_fallback(text)
-
-    def _split_fallback(self, text: str) -> List[str]:
+    def _split_recursive(self, text: str) -> List[str]:
         """Fallback text splitting when cocoindex is not available."""
         parts = self._split_text(text)
         chunks = []
@@ -160,8 +135,8 @@ class TextSplitter:
         """
         Split a single text into chunks.
 
-        Uses cocoindex's SplitRecursively when available for intelligent
-        splitting that respects document structure.
+        Uses recursive splitting that respects document structure
+        (paragraphs, sentences) for better chunk boundaries.
 
         Args:
             text: The text to split
@@ -169,10 +144,7 @@ class TextSplitter:
         Returns:
             List of text chunks
         """
-        if self._use_cocoindex:
-            return self._split_with_cocoindex(text)
-        else:
-            return self._split_fallback(text)
+        return self._split_recursive(text)
 
     def __call__(self, documents: Sequence[Document]) -> List[Document]:
         """
@@ -252,12 +224,12 @@ class TextSplitter:
         return ext_map.get(ext, "text")
 
 
-class CocoIndexEmbedder:
+class SentenceTransformerEmbedder:
     """
-    Create embeddings using cocoindex's SentenceTransformerEmbed.
+    Create embeddings using sentence-transformers directly.
 
-    This uses cocoindex's built-in embedding function which leverages
-    the sentence-transformers library for high-quality text embeddings.
+    This provides local embedding functionality using the sentence-transformers
+    library for high-quality text embeddings without requiring external APIs.
     """
 
     def __init__(
@@ -265,21 +237,22 @@ class CocoIndexEmbedder:
         model: str = "sentence-transformers/all-MiniLM-L6-v2",
     ):
         """
-        Initialize the cocoindex embedder.
+        Initialize the sentence transformer embedder.
 
         Args:
             model: The sentence-transformers model to use
         """
-        self.model = model
-        self._embed_fn = None
+        self.model_name = model
+        self._model = None
 
-        if COCOINDEX_AVAILABLE:
-            try:
-                self._embed_fn = cocoindex.functions.SentenceTransformerEmbed(model=model)
-                logger.info(f"Using cocoindex SentenceTransformerEmbed with model: {model}")
-            except Exception as e:
-                logger.warning(f"Failed to initialize cocoindex embedder: {e}")
-                self._embed_fn = None
+        try:
+            from sentence_transformers import SentenceTransformer
+            self._model = SentenceTransformer(model)
+            logger.info(f"Loaded SentenceTransformer model: {model}")
+        except ImportError:
+            logger.warning("sentence-transformers not installed, embedder not available")
+        except Exception as e:
+            logger.warning(f"Failed to load SentenceTransformer model: {e}")
 
     def __call__(self, text: str) -> EmbedderOutput:
         """
@@ -291,11 +264,11 @@ class CocoIndexEmbedder:
         Returns:
             EmbedderOutput with embedding data
         """
-        if self._embed_fn is None:
-            raise RuntimeError("cocoindex embedder not available")
+        if self._model is None:
+            raise RuntimeError("SentenceTransformer model not available")
 
         try:
-            embedding = self._embed_fn(text)
+            embedding = self._model.encode(text)
 
             # Convert to list if necessary
             if hasattr(embedding, 'tolist'):
@@ -320,15 +293,15 @@ class Embedder:
     Create embeddings for text using a model client.
 
     This wraps a model client to provide embedding functionality.
-    Can also use cocoindex's SentenceTransformerEmbed as a fallback.
+    Can also use sentence-transformers for local embeddings.
     """
 
     def __init__(
         self,
         model_client: Any = None,
         model_kwargs: Dict[str, Any] = None,
-        use_cocoindex: bool = False,
-        cocoindex_model: str = "sentence-transformers/all-MiniLM-L6-v2",
+        use_sentence_transformers: bool = False,
+        sentence_transformer_model: str = "sentence-transformers/all-MiniLM-L6-v2",
     ):
         """
         Initialize the embedder.
@@ -336,17 +309,17 @@ class Embedder:
         Args:
             model_client: The model client to use for embeddings
             model_kwargs: Additional kwargs for the model
-            use_cocoindex: Whether to use cocoindex's SentenceTransformerEmbed
-            cocoindex_model: The model to use with cocoindex embedder
+            use_sentence_transformers: Whether to use local sentence-transformers
+            sentence_transformer_model: The model to use with sentence-transformers
         """
         self.model_client = model_client
         self.model_kwargs = model_kwargs or {}
-        self.use_cocoindex = use_cocoindex and COCOINDEX_AVAILABLE
+        self.use_sentence_transformers = use_sentence_transformers
 
-        if self.use_cocoindex:
-            self._cocoindex_embedder = CocoIndexEmbedder(model=cocoindex_model)
+        if self.use_sentence_transformers:
+            self._local_embedder = SentenceTransformerEmbedder(model=sentence_transformer_model)
         else:
-            self._cocoindex_embedder = None
+            self._local_embedder = None
 
     def __call__(self, input: str) -> EmbedderOutput:
         """
@@ -358,16 +331,16 @@ class Embedder:
         Returns:
             EmbedderOutput with embedding data
         """
-        # Try cocoindex first if enabled
-        if self.use_cocoindex and self._cocoindex_embedder is not None:
+        # Try local sentence-transformers first if enabled
+        if self.use_sentence_transformers and self._local_embedder is not None:
             try:
-                return self._cocoindex_embedder(input)
+                return self._local_embedder(input)
             except Exception as e:
-                logger.warning(f"cocoindex embedding failed: {e}, falling back to model client")
+                logger.warning(f"Local embedding failed: {e}, falling back to model client")
 
         # Use model client
         if self.model_client is None:
-            raise ValueError("No model client or cocoindex embedder available")
+            raise ValueError("No model client or local embedder available")
 
         from api.types import ModelType
 
