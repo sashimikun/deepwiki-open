@@ -1,6 +1,3 @@
-import adalflow as adal
-from adalflow.core.types import Document, List
-from adalflow.components.data_process import TextSplitter, ToEmbeddings
 import os
 import subprocess
 import json
@@ -9,11 +6,20 @@ import logging
 import base64
 import re
 import glob
-from adalflow.utils import get_adalflow_default_root_path
-from adalflow.core.db import LocalDB
+from typing import List
+from urllib.parse import urlparse, urlunparse, quote
+
+from api.types import Document
+from api.components import (
+    get_default_root_path,
+    TextSplitter,
+    ToEmbeddings,
+    LocalDB,
+    Sequential,
+    Embedder,
+)
 from api.config import configs, DEFAULT_EXCLUDED_DIRS, DEFAULT_EXCLUDED_FILES
 from api.ollama_patch import OllamaDocumentProcessor
-from urllib.parse import urlparse, urlunparse, quote
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -355,7 +361,7 @@ def prepare_data_pipeline(is_ollama_embedder: bool = None):
                                            If None, will be determined from configuration.
 
     Returns:
-        adal.Sequential: The data transformation pipeline
+        Sequential: The data transformation pipeline
     """
     from api.config import get_embedder_config, is_ollama_embedder as check_ollama
 
@@ -370,7 +376,7 @@ def prepare_data_pipeline(is_ollama_embedder: bool = None):
         raise ValueError("No embedder configuration found")
 
     # Create embedder based on configuration
-    embedder = adal.Embedder(
+    embedder = Embedder(
         model_client=embedder_config["model_client"](),
         model_kwargs=embedder_config["model_kwargs"],
     )
@@ -385,7 +391,7 @@ def prepare_data_pipeline(is_ollama_embedder: bool = None):
             embedder=embedder, batch_size=batch_size
         )
 
-    data_transformer = adal.Sequential(
+    data_transformer = Sequential(
         splitter, embedder_transformer
     )  # sequential will chain together splitter and embedder
     return data_transformer
@@ -706,7 +712,7 @@ class DatabaseManager:
         logger.info(f"Preparing repo storage for {repo_url_or_path}...")
 
         try:
-            root_path = get_adalflow_default_root_path()
+            root_path = get_default_root_path()
 
             os.makedirs(root_path, exist_ok=True)
             # url

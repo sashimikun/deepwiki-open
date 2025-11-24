@@ -37,8 +37,8 @@ app.add_middleware(
     allow_headers=["*"],  # Allows all headers
 )
 
-# Helper function to get adalflow root path
-def get_adalflow_default_root_path():
+# Helper function to get default root path for data storage
+def get_default_root_path():
     return os.path.expanduser(os.path.join("~", ".adalflow"))
 
 # --- Pydantic Models ---
@@ -361,7 +361,7 @@ app.add_websocket_route("/ws/chat", handle_websocket_chat)
 
 # --- Wiki Cache Helper Functions ---
 
-WIKI_CACHE_DIR = os.path.join(get_adalflow_default_root_path(), "wikicache")
+WIKI_CACHE_DIR = os.path.join(get_default_root_path(), "wikicache")
 os.makedirs(WIKI_CACHE_DIR, exist_ok=True)
 
 def get_wiki_cache_path(owner: str, repo: str, repo_type: str, language: str) -> str:

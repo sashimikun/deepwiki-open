@@ -8,8 +8,8 @@ import aiohttp
 import requests
 from requests.exceptions import RequestException, Timeout
 
-from adalflow.core.model_client import ModelClient
-from adalflow.core.types import (
+from api.model_client import ModelClient
+from api.types import (
     CompletionUsage,
     ModelType,
     GeneratorOutput,
@@ -28,12 +28,15 @@ class OpenRouterClient(ModelClient):
     Example:
         ```python
         from api.openrouter_client import OpenRouterClient
+        from api.types import ModelType
 
         client = OpenRouterClient()
-        generator = adal.Generator(
-            model_client=client,
-            model_kwargs={"model": "openai/gpt-4o"}
+        api_kwargs = client.convert_inputs_to_api_kwargs(
+            input="Hello, world!",
+            model_kwargs={"model": "openai/gpt-4o"},
+            model_type=ModelType.LLM
         )
+        response = client.call(api_kwargs, model_type=ModelType.LLM)
         ```
     """
 

@@ -4,13 +4,13 @@ from typing import List, Optional
 from urllib.parse import unquote
 
 import google.generativeai as genai
-from adalflow.components.model_client.ollama_client import OllamaClient
-from adalflow.core.types import ModelType
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from api.model_client import OllamaClient
+from api.types import ModelType
 from api.config import get_model_config
 from api.data_pipeline import count_tokens, get_file_content
 from api.openai_client import OpenAIClient

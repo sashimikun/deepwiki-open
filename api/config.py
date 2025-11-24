@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 from api.openai_client import OpenAIClient
 from api.openrouter_client import OpenRouterClient
 from api.bedrock_client import BedrockClient
-from adalflow import GoogleGenAIClient, OllamaClient
+from api.model_client import GoogleGenAIClient, OllamaClient
 
 # Get API keys from environment variables
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')

@@ -8,8 +8,8 @@ import botocore
 import backoff
 from typing import Dict, Any, Optional, List, Generator, Union, AsyncGenerator
 
-from adalflow.core.model_client import ModelClient
-from adalflow.core.types import ModelType, GeneratorOutput
+from api.model_client import ModelClient
+from api.types import ModelType, GeneratorOutput
 
 log = logging.getLogger(__name__)
 
@@ -22,12 +22,15 @@ class BedrockClient(ModelClient):
     Example:
         ```python
         from api.bedrock_client import BedrockClient
+        from api.types import ModelType
 
         client = BedrockClient()
-        generator = adal.Generator(
-            model_client=client,
-            model_kwargs={"model": "anthropic.claude-3-sonnet-20240229-v1:0"}
+        api_kwargs = client.convert_inputs_to_api_kwargs(
+            input="Hello, world!",
+            model_kwargs={"model": "anthropic.claude-3-sonnet-20240229-v1:0"},
+            model_type=ModelType.LLM
         )
+        response = client.call(api_kwargs, model_type=ModelType.LLM)
         ```
     """
 

@@ -19,12 +19,6 @@ import re
 import logging
 import backoff
 
-# optional import
-from adalflow.utils.lazy_import import safe_import, OptionalPackages
-from openai.types.chat.chat_completion import Choice
-
-openai = safe_import(OptionalPackages.OPENAI.value[0], OptionalPackages.OPENAI.value[1])
-
 from openai import OpenAI, AsyncOpenAI, Stream
 from openai import (
     APITimeoutError,
@@ -39,16 +33,18 @@ from openai.types import (
     Image,
 )
 from openai.types.chat import ChatCompletionChunk, ChatCompletion, ChatCompletionMessage
+from openai.types.chat.chat_completion import Choice
 
-from adalflow.core.model_client import ModelClient
-from adalflow.core.types import (
+from api.model_client import ModelClient
+from api.types import (
     ModelType,
     EmbedderOutput,
     TokenLogProb,
     CompletionUsage,
     GeneratorOutput,
+    EmbeddingData,
+    parse_embedding_response,
 )
-from adalflow.components.model_client.utils import parse_embedding_response
 
 log = logging.getLogger(__name__)
 T = TypeVar("T")
@@ -60,10 +56,6 @@ def get_first_message_content(completion: ChatCompletion) -> str:
     It is the default parser for chat completion."""
     log.debug(f"raw completion: {completion}")
     return completion.choices[0].message.content
-
-
-# def _get_chat_completion_usage(completion: ChatCompletion) -> OpenAICompletionUsage:
-#     return completion.usage
 
 
 # A simple heuristic to estimate token count for estimating number of tokens in a Streaming response
@@ -203,18 +195,6 @@ class OpenAIClient(ModelClient):
             )
         return AsyncOpenAI(api_key=api_key, base_url=self.base_url)
 
-    # def _parse_chat_completion(self, completion: ChatCompletion) -> "GeneratorOutput":
-    #     # TODO: raw output it is better to save the whole completion as a source of truth instead of just the message
-    #     try:
-    #         data = self.chat_completion_parser(completion)
-    #         usage = self.track_completion_usage(completion)
-    #         return GeneratorOutput(
-    #             data=data, error=None, raw_response=str(data), usage=usage
-    #         )
-    #     except Exception as e:
-    #         log.error(f"Error parsing the completion: {e}")
-    #         return GeneratorOutput(data=None, error=str(e), raw_response=completion)
-
     def parse_chat_completion(
         self,
         completion: Union[ChatCompletion, Generator[ChatCompletionChunk, None, None]],
@@ -257,7 +237,7 @@ class OpenAIClient(ModelClient):
     def parse_embedding_response(
         self, response: CreateEmbeddingResponse
     ) -> EmbedderOutput:
-        r"""Parse the embedding response to a structure Adalflow components can understand.
+        r"""Parse the embedding response to a structure components can understand.
 
         Should be called in ``Embedder``.
         """
@@ -292,7 +272,7 @@ class OpenAIClient(ModelClient):
         """
 
         final_model_kwargs = model_kwargs.copy()
-        if model_type == ModelType.EMBEDDER:
+        if model_type == ModelType.EMBEDDER or model_type == ModelType.EMBEDDING:
             if isinstance(input, str):
                 input = [input]
             # convert input to input
@@ -414,7 +394,7 @@ class OpenAIClient(ModelClient):
         """
         log.info(f"api_kwargs: {api_kwargs}")
         self._api_kwargs = api_kwargs
-        if model_type == ModelType.EMBEDDER:
+        if model_type == ModelType.EMBEDDER or model_type == ModelType.EMBEDDING:
             return self.sync_client.embeddings.create(**api_kwargs)
         elif model_type == ModelType.LLM:
             if "stream" in api_kwargs and api_kwargs.get("stream", False):
@@ -495,7 +475,7 @@ class OpenAIClient(ModelClient):
         self._api_kwargs = api_kwargs
         if self.async_client is None:
             self.async_client = self.init_async_client()
-        if model_type == ModelType.EMBEDDER:
+        if model_type == ModelType.EMBEDDER or model_type == ModelType.EMBEDDING:
             return await self.async_client.embeddings.create(**api_kwargs)
         elif model_type == ModelType.LLM:
             return await self.async_client.chat.completions.create(**api_kwargs)
@@ -519,7 +499,7 @@ class OpenAIClient(ModelClient):
 
     @classmethod
     def from_dict(cls: type[T], data: Dict[str, Any]) -> T:
-        obj = super().from_dict(data)
+        obj = cls(**data)
         # recreate the existing clients
         obj.sync_client = obj.init_sync_client()
         obj.async_client = obj.init_async_client()
@@ -527,13 +507,13 @@ class OpenAIClient(ModelClient):
 
     def to_dict(self) -> Dict[str, Any]:
         r"""Convert the component to a dictionary."""
-        # TODO: not exclude but save yes or no for recreating the clients
-        exclude = [
-            "sync_client",
-            "async_client",
-        ]  # unserializable object
-        output = super().to_dict(exclude=exclude)
-        return output
+        return {
+            "_api_key": self._api_key,
+            "_env_api_key_name": self._env_api_key_name,
+            "_env_base_url_name": self._env_base_url_name,
+            "base_url": self.base_url,
+            "_input_type": self._input_type,
+        }
 
     def _encode_image(self, image_path: str) -> str:
         """Encode image to base64 string.
@@ -585,45 +565,3 @@ class OpenAIClient(ModelClient):
                     },
                 }
         return image_source
-
-
-# Example usage:
-if __name__ == "__main__":
-    from adalflow.core import Generator
-    from adalflow.utils import setup_env
-
-    # log = get_logger(level="DEBUG")
-
-    setup_env()
-    prompt_kwargs = {"input_str": "What is the meaning of life?"}
-
-    gen = Generator(
-        model_client=OpenAIClient(),
-        model_kwargs={"model": "gpt-4o", "stream": False},
-    )
-    gen_response = gen(prompt_kwargs)
-    print(f"gen_response: {gen_response}")
-
-    # for genout in gen_response.data:
-    #     print(f"genout: {genout}")
-
-    # test that to_dict and from_dict works
-    # model_client = OpenAIClient()
-    # model_client_dict = model_client.to_dict()
-    # from_dict_model_client = OpenAIClient.from_dict(model_client_dict)
-    # assert model_client_dict == from_dict_model_client.to_dict()
-
-
-if __name__ == "__main__":
-    import adalflow as adal
-
-    # setup env or pass the api_key
-    from adalflow.utils import setup_env
-
-    setup_env()
-
-    openai_llm = adal.Generator(
-        model_client=OpenAIClient(), model_kwargs={"model": "gpt-4o"}
-    )
-    resopnse = openai_llm(prompt_kwargs={"input_str": "What is LLM?"})
-    print(resopnse)

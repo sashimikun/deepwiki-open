@@ -1,26 +1,46 @@
+"""RAG (Retrieval-Augmented Generation) implementation.
+
+This module provides the RAG component for code repository analysis,
+replacing adalflow with custom implementations.
+"""
+
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, List, Tuple, Dict
 from uuid import uuid4
 
-import adalflow as adal
+from api.types import Document, DataClass
+from api.components import Embedder
+from api.retriever import FAISSRetriever
+from api.config import configs
+from api.data_pipeline import DatabaseManager
 
 
-# Create our own implementation of the conversation classes
+# Configure logging
+logger = logging.getLogger(__name__)
+
+# Maximum token limit for embedding models
+MAX_INPUT_TOKENS = 7500  # Safe threshold below 8192 token limit
+
+
+# Conversation classes
 @dataclass
 class UserQuery:
     query_str: str
 
+
 @dataclass
 class AssistantResponse:
     response_str: str
+
 
 @dataclass
 class DialogTurn:
     id: str
     user_query: UserQuery
     assistant_response: AssistantResponse
+
 
 class CustomConversation:
     """Custom implementation of Conversation to fix the list assignment index out of range error"""
@@ -34,24 +54,17 @@ class CustomConversation:
             self.dialog_turns = []
         self.dialog_turns.append(dialog_turn)
 
-# Import other adalflow components
-from adalflow.components.retriever.faiss_retriever import FAISSRetriever
-from api.config import configs
-from api.data_pipeline import DatabaseManager
 
-# Configure logging
-logger = logging.getLogger(__name__)
-
-# Maximum token limit for embedding models
-MAX_INPUT_TOKENS = 7500  # Safe threshold below 8192 token limit
-
-class Memory(adal.core.component.DataComponent):
+class Memory:
     """Simple conversation management with a list of dialog turns."""
 
     def __init__(self):
-        super().__init__()
         # Use our custom implementation instead of the original Conversation class
         self.current_conversation = CustomConversation()
+
+    def __call__(self) -> Dict:
+        """Return the conversation history as a dictionary."""
+        return self.call()
 
     def call(self) -> Dict:
         """Return the conversation history as a dictionary."""
@@ -137,6 +150,7 @@ class Memory(adal.core.component.DataComponent):
                 logger.error(f"Failed to recover from error: {str(e2)}")
                 return False
 
+
 system_prompt = r"""
 You are a code assistant which answers user questions on a Github Repo.
 You will receive user query, relevant context, and past conversation history.
@@ -163,45 +177,16 @@ IMPORTANT FORMATTING RULES:
 Think step by step and ensure your answer is well-structured and visually organized.
 """
 
-# Template for RAG
-RAG_TEMPLATE = r"""<START_OF_SYS_PROMPT>
-{{system_prompt}}
-{{output_format_str}}
-<END_OF_SYS_PROMPT>
-{# OrderedDict of DialogTurn #}
-{% if conversation_history %}
-<START_OF_CONVERSATION_HISTORY>
-{% for key, dialog_turn in conversation_history.items() %}
-{{key}}.
-User: {{dialog_turn.user_query.query_str}}
-You: {{dialog_turn.assistant_response.response_str}}
-{% endfor %}
-<END_OF_CONVERSATION_HISTORY>
-{% endif %}
-{% if contexts %}
-<START_OF_CONTEXT>
-{% for context in contexts %}
-{{loop.index }}.
-File Path: {{context.meta_data.get('file_path', 'unknown')}}
-Content: {{context.text}}
-{% endfor %}
-<END_OF_CONTEXT>
-{% endif %}
-<START_OF_USER_PROMPT>
-{{input_str}}
-<END_OF_USER_PROMPT>
-"""
-
-from dataclasses import dataclass, field
 
 @dataclass
-class RAGAnswer(adal.DataClass):
+class RAGAnswer(DataClass):
     rationale: str = field(default="", metadata={"desc": "Chain of thoughts for the answer."})
     answer: str = field(default="", metadata={"desc": "Answer to the user query, formatted in markdown for beautiful rendering with react-markdown. DO NOT include ``` triple backticks fences at the beginning or end of your answer."})
 
     __output_fields__ = ["rationale", "answer"]
 
-class RAG(adal.Component):
+
+class RAG:
     """RAG with one repo.
     If you want to load a new repos, call prepare_retriever(repo_url_or_path) first."""
 
@@ -214,8 +199,6 @@ class RAG(adal.Component):
             model: Model name to use with the provider
             use_s3: Whether to use S3 for database storage (default: False)
         """
-        super().__init__()
-
         self.provider = provider
         self.model = model
 
@@ -234,7 +217,7 @@ class RAG(adal.Component):
             raise ValueError("No embedder configuration found")
 
         # --- Initialize Embedder ---
-        self.embedder = adal.Embedder(
+        self.embedder = Embedder(
             model_client=embedder_config["model_client"](),
             model_kwargs=embedder_config["model_kwargs"],
         )
@@ -252,42 +235,6 @@ class RAG(adal.Component):
         self.query_embedder = single_string_embedder if self.is_ollama_embedder else self.embedder
 
         self.initialize_db_manager()
-
-        # Set up the output parser
-        data_parser = adal.DataClassParser(data_class=RAGAnswer, return_data_class=True)
-
-        # Format instructions to ensure proper output structure
-        format_instructions = data_parser.get_output_format_str() + """
-
-IMPORTANT FORMATTING RULES:
-1. DO NOT include your thinking or reasoning process in the output
-2. Provide only the final, polished answer
-3. DO NOT include ```markdown fences at the beginning or end of your answer
-4. DO NOT wrap your response in any kind of fences
-5. Start your response directly with the content
-6. The content will already be rendered as markdown
-7. Do not use backslashes before special characters like [ ] { } in your answer
-8. When listing tags or similar items, write them as plain text without escape characters
-9. For pipe characters (|) in text, write them directly without escaping them"""
-
-        # Get model configuration based on provider and model
-        from api.config import get_model_config
-        generator_config = get_model_config(self.provider, self.model)
-
-        # Set up the main generator
-        self.generator = adal.Generator(
-            template=RAG_TEMPLATE,
-            prompt_kwargs={
-                "output_format_str": format_instructions,
-                "conversation_history": self.memory(),
-                "system_prompt": system_prompt,
-                "contexts": None,
-            },
-            model_client=generator_config["model_client"](),
-            model_kwargs=generator_config["model_kwargs"],
-            output_processors=data_parser,
-        )
-
 
     def initialize_db_manager(self):
         """Initialize the database manager with local storage"""
@@ -489,3 +436,7 @@ IMPORTANT FORMATTING RULES:
                 answer=f"I apologize, but I encountered an error while processing your question. Please try again or rephrase your question."
             )
             return error_response, []
+
+    def __call__(self, query: str, language: str = "en") -> Tuple[List]:
+        """Alias for call method."""
+        return self.call(query, language)

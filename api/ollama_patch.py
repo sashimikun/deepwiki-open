@@ -1,10 +1,10 @@
-from typing import Sequence, List
+from typing import Sequence, List, Any
 from copy import deepcopy
 from tqdm import tqdm
 import logging
-import adalflow as adal
-from adalflow.core.types import Document
-from adalflow.core.component import DataComponent
+
+from api.types import Document
+from api.components import Embedder
 
 # Configure logging
 logging.basicConfig(
@@ -13,13 +13,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-class OllamaDocumentProcessor(DataComponent):
+
+class OllamaDocumentProcessor:
     """
     Process documents for Ollama embeddings by processing one document at a time.
-    Adalflow Ollama Client does not support batch embedding, so we need to process each document individually.
+    Ollama Client does not support batch embedding, so we need to process each document individually.
     """
-    def __init__(self, embedder: adal.Embedder) -> None:
-        super().__init__()
+    def __init__(self, embedder: Any) -> None:
         self.embedder = embedder
 
     def __call__(self, documents: Sequence[Document]) -> Sequence[Document]:
