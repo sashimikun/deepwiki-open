@@ -1,7 +1,7 @@
 """Components for data processing using cocoindex.
 
 This module provides text splitting, embedding, and database functionality
-to replace adalflow components with cocoindex-based implementations.
+using cocoindex's transformation functions where available.
 """
 
 import os
@@ -15,12 +15,19 @@ from api.types import Document, EmbedderOutput, EmbeddingData
 
 logger = logging.getLogger(__name__)
 
+# Try to import cocoindex for advanced text splitting
+try:
+    import cocoindex
+    COCOINDEX_AVAILABLE = True
+    logger.info("cocoindex is available for text splitting")
+except ImportError:
+    COCOINDEX_AVAILABLE = False
+    logger.warning("cocoindex not available, using fallback text splitter")
+
 
 def get_default_root_path() -> str:
     """
     Get the default root path for storing data.
-
-    This replaces adalflow's get_adalflow_default_root_path function.
 
     Returns:
         str: The default root path (~/.adalflow for compatibility)
@@ -30,10 +37,13 @@ def get_default_root_path() -> str:
 
 class TextSplitter:
     """
-    Split text into smaller chunks.
+    Split text into smaller chunks using cocoindex's SplitRecursively when available.
 
-    This is a simple implementation that splits text by separators
-    while respecting a maximum chunk size with overlap.
+    This class provides text splitting functionality that leverages cocoindex's
+    intelligent recursive splitting algorithm which respects document structure
+    (headings, paragraphs, sentences) for better chunk boundaries.
+
+    Falls back to a simple implementation if cocoindex is not available.
     """
 
     def __init__(
@@ -41,31 +51,98 @@ class TextSplitter:
         split_by: str = "word",
         chunk_size: int = 800,
         chunk_overlap: int = 200,
+        language: str = "markdown",
     ):
         """
         Initialize the text splitter.
 
         Args:
-            split_by: How to split the text ("word", "sentence", "paragraph", or a custom separator)
-            chunk_size: Maximum size of each chunk (in tokens/words)
-            chunk_overlap: Number of tokens/words to overlap between chunks
+            split_by: How to split the text ("word", "sentence", "paragraph")
+                     - Used for fallback mode only
+            chunk_size: Maximum size of each chunk (in characters for cocoindex)
+            chunk_overlap: Number of characters to overlap between chunks
+            language: Language/format hint for cocoindex ("markdown", "python", etc.)
         """
         self.split_by = split_by
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
+        self.language = language
+        self._use_cocoindex = COCOINDEX_AVAILABLE
+
+    def _split_with_cocoindex(self, text: str) -> List[str]:
+        """
+        Split text using cocoindex's SplitRecursively function.
+
+        cocoindex.functions.SplitRecursively intelligently splits text by trying
+        higher-level boundaries first (sections, paragraphs) before falling back
+        to lower-level boundaries (sentences, words).
+        """
+        try:
+            # Use cocoindex's SplitRecursively function
+            split_fn = cocoindex.functions.SplitRecursively(
+                chunk_size=self.chunk_size,
+                chunk_overlap=self.chunk_overlap,
+            )
+            # Apply the transformation
+            chunks = split_fn(text, language=self.language)
+
+            # Handle the result - cocoindex may return different formats
+            if isinstance(chunks, list):
+                return [str(chunk) for chunk in chunks]
+            elif hasattr(chunks, '__iter__'):
+                return [str(chunk) for chunk in chunks]
+            else:
+                return [str(chunks)]
+        except Exception as e:
+            logger.warning(f"cocoindex SplitRecursively failed: {e}, falling back to simple split")
+            return self._split_fallback(text)
+
+    def _split_fallback(self, text: str) -> List[str]:
+        """Fallback text splitting when cocoindex is not available."""
+        parts = self._split_text(text)
+        chunks = []
+
+        current_chunk = []
+        current_size = 0
+
+        for part in parts:
+            part_size = len(part)
+
+            if current_size + part_size > self.chunk_size and current_chunk:
+                # Save current chunk
+                chunks.append(self._join_chunks(current_chunk))
+
+                # Keep overlap
+                overlap_chars = 0
+                overlap_parts = []
+                for p in reversed(current_chunk):
+                    if overlap_chars + len(p) <= self.chunk_overlap:
+                        overlap_parts.insert(0, p)
+                        overlap_chars += len(p)
+                    else:
+                        break
+                current_chunk = overlap_parts
+                current_size = overlap_chars
+
+            current_chunk.append(part)
+            current_size += part_size
+
+        # Add the last chunk
+        if current_chunk:
+            chunks.append(self._join_chunks(current_chunk))
+
+        return chunks
 
     def _split_text(self, text: str) -> List[str]:
         """Split text based on the split_by parameter."""
         if self.split_by == "word":
             return text.split()
         elif self.split_by == "sentence":
-            # Simple sentence splitting
             import re
             return re.split(r'(?<=[.!?])\s+', text)
         elif self.split_by == "paragraph":
             return text.split("\n\n")
         else:
-            # Treat as a custom separator
             return text.split(self.split_by)
 
     def _join_chunks(self, parts: List[str]) -> str:
@@ -83,38 +160,19 @@ class TextSplitter:
         """
         Split a single text into chunks.
 
+        Uses cocoindex's SplitRecursively when available for intelligent
+        splitting that respects document structure.
+
         Args:
             text: The text to split
 
         Returns:
             List of text chunks
         """
-        parts = self._split_text(text)
-        chunks = []
-
-        current_chunk = []
-        current_size = 0
-
-        for part in parts:
-            part_size = 1  # Each part counts as 1 unit
-
-            if current_size + part_size > self.chunk_size and current_chunk:
-                # Save current chunk
-                chunks.append(self._join_chunks(current_chunk))
-
-                # Keep overlap
-                overlap_start = max(0, len(current_chunk) - self.chunk_overlap)
-                current_chunk = current_chunk[overlap_start:]
-                current_size = len(current_chunk)
-
-            current_chunk.append(part)
-            current_size += part_size
-
-        # Add the last chunk
-        if current_chunk:
-            chunks.append(self._join_chunks(current_chunk))
-
-        return chunks
+        if self._use_cocoindex:
+            return self._split_with_cocoindex(text)
+        else:
+            return self._split_fallback(text)
 
     def __call__(self, documents: Sequence[Document]) -> List[Document]:
         """
@@ -129,10 +187,20 @@ class TextSplitter:
         result = []
 
         for doc in documents:
+            # Detect language from file extension if available
+            file_path = doc.meta_data.get("file_path", "")
+            language = self._detect_language(file_path)
+
+            # Temporarily set language for this document
+            original_language = self.language
+            self.language = language
+
             chunks = self.split(doc.text)
 
+            # Restore original language
+            self.language = original_language
+
             for i, chunk in enumerate(chunks):
-                # Create new document for each chunk
                 new_doc = Document(
                     text=chunk,
                     meta_data={
@@ -147,18 +215,120 @@ class TextSplitter:
 
         return result
 
+    def _detect_language(self, file_path: str) -> str:
+        """Detect the language/format from file extension."""
+        ext_map = {
+            ".py": "python",
+            ".js": "javascript",
+            ".ts": "typescript",
+            ".jsx": "javascript",
+            ".tsx": "typescript",
+            ".java": "java",
+            ".c": "c",
+            ".cpp": "cpp",
+            ".h": "c",
+            ".hpp": "cpp",
+            ".go": "go",
+            ".rs": "rust",
+            ".rb": "ruby",
+            ".php": "php",
+            ".swift": "swift",
+            ".kt": "kotlin",
+            ".scala": "scala",
+            ".md": "markdown",
+            ".rst": "rst",
+            ".txt": "text",
+            ".html": "html",
+            ".css": "css",
+            ".json": "json",
+            ".yaml": "yaml",
+            ".yml": "yaml",
+            ".xml": "xml",
+            ".sql": "sql",
+            ".sh": "bash",
+            ".bash": "bash",
+        }
+        ext = os.path.splitext(file_path)[1].lower()
+        return ext_map.get(ext, "text")
+
+
+class CocoIndexEmbedder:
+    """
+    Create embeddings using cocoindex's SentenceTransformerEmbed.
+
+    This uses cocoindex's built-in embedding function which leverages
+    the sentence-transformers library for high-quality text embeddings.
+    """
+
+    def __init__(
+        self,
+        model: str = "sentence-transformers/all-MiniLM-L6-v2",
+    ):
+        """
+        Initialize the cocoindex embedder.
+
+        Args:
+            model: The sentence-transformers model to use
+        """
+        self.model = model
+        self._embed_fn = None
+
+        if COCOINDEX_AVAILABLE:
+            try:
+                self._embed_fn = cocoindex.functions.SentenceTransformerEmbed(model=model)
+                logger.info(f"Using cocoindex SentenceTransformerEmbed with model: {model}")
+            except Exception as e:
+                logger.warning(f"Failed to initialize cocoindex embedder: {e}")
+                self._embed_fn = None
+
+    def __call__(self, text: str) -> EmbedderOutput:
+        """
+        Create embeddings for the input text.
+
+        Args:
+            text: The text to embed
+
+        Returns:
+            EmbedderOutput with embedding data
+        """
+        if self._embed_fn is None:
+            raise RuntimeError("cocoindex embedder not available")
+
+        try:
+            embedding = self._embed_fn(text)
+
+            # Convert to list if necessary
+            if hasattr(embedding, 'tolist'):
+                embedding = embedding.tolist()
+            elif not isinstance(embedding, list):
+                embedding = list(embedding)
+
+            return EmbedderOutput(
+                data=[EmbeddingData(embedding=embedding, index=0)],
+                raw_response=embedding,
+            )
+        except Exception as e:
+            logger.error(f"Error creating embedding: {e}")
+            return EmbedderOutput(
+                data=[],
+                error=str(e),
+            )
+
 
 class Embedder:
     """
     Create embeddings for text using a model client.
 
     This wraps a model client to provide embedding functionality.
+    Can also use cocoindex's SentenceTransformerEmbed as a fallback.
     """
 
     def __init__(
         self,
-        model_client: Any,
+        model_client: Any = None,
         model_kwargs: Dict[str, Any] = None,
+        use_cocoindex: bool = False,
+        cocoindex_model: str = "sentence-transformers/all-MiniLM-L6-v2",
     ):
         """
         Initialize the embedder.
@@ -166,9 +336,17 @@ class Embedder:
         Args:
             model_client: The model client to use for embeddings
             model_kwargs: Additional kwargs for the model
+            use_cocoindex: Whether to use cocoindex's SentenceTransformerEmbed
+            cocoindex_model: The model to use with cocoindex embedder
         """
         self.model_client = model_client
         self.model_kwargs = model_kwargs or {}
+        self.use_cocoindex = use_cocoindex and COCOINDEX_AVAILABLE
+
+        if self.use_cocoindex:
+            self._cocoindex_embedder = CocoIndexEmbedder(model=cocoindex_model)
+        else:
+            self._cocoindex_embedder = None
 
     def __call__(self, input: str) -> EmbedderOutput:
         """
@@ -180,6 +358,17 @@ class Embedder:
         Returns:
             EmbedderOutput with embedding data
         """
+        # Try cocoindex first if enabled
+        if self.use_cocoindex and self._cocoindex_embedder is not None:
+            try:
+                return self._cocoindex_embedder(input)
+            except Exception as e:
+                logger.warning(f"cocoindex embedding failed: {e}, falling back to model client")
+
+        # Use model client
+        if self.model_client is None:
+            raise ValueError("No model client or cocoindex embedder available")
+
         from api.types import ModelType
 
         api_kwargs = self.model_client.convert_inputs_to_api_kwargs(
@@ -244,7 +433,6 @@ class ToEmbeddings:
             texts = [doc.text for doc in batch]
 
             try:
-                # Try batch embedding first
                 for j, text in enumerate(texts):
                     result = self.embedder(text)
 
