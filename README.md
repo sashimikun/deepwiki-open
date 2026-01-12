@@ -16,7 +16,7 @@
 
 [English](./README.md) | [简体中文](./README.zh.md) | [繁體中文](./README.zh-tw.md) | [日本語](./README.ja.md) | [Español](./README.es.md) | [한국어](./README.kr.md) | [Tiếng Việt](./README.vi.md) | [Português Brasileiro](./README.pt-br.md) | [Français](./README.fr.md) | [Русский](./README.ru.md)
 
-## ✨ Features
+## Features
 
 - **Instant Documentation**: Turn any GitHub, GitLab or BitBucket repo into a wiki in seconds
 - **Private Repository Support**: Securely access private repositories with personal access tokens
@@ -28,7 +28,7 @@
 - **Multiple Model Providers**: Support for Google Gemini, OpenAI, OpenRouter, and local Ollama models
 - **Flexible Embeddings**: Choose between OpenAI, Google AI, or local Ollama embeddings for optimal performance
 
-## 🚀 Quick Start (Super Easy!)
+## Quick Start (Super Easy!)
 
 ### Option 1: Using Docker
 
@@ -56,7 +56,7 @@ docker-compose up
 
 For detailed instructions on using DeepWiki with Ollama and Docker, see [Ollama Instructions](Ollama-instruction.md).
 
-> 💡 **Where to get these keys:**
+> **Where to get these keys:**
 > - Get a Google API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
 > - Get an OpenAI API key from [OpenAI Platform](https://platform.openai.com/api-keys)
 > - Get Azure OpenAI credentials from [Azure Portal](https://portal.azure.com/) - create an Azure OpenAI resource and get the API key, endpoint, and API version
@@ -113,7 +113,7 @@ yarn dev
 3. For private repositories, click "+ Add access tokens" and enter your GitHub or GitLab personal access token
 4. Click "Generate Wiki" and watch the magic happen!
 
-## 🔍 How It Works
+## How It Works
 
 DeepWiki uses AI to:
 
@@ -163,7 +163,7 @@ graph TD
     class H result;
 ```
 
-## 🛠️ Project Structure
+## Project Structure
 
 ```
 deepwiki/
@@ -186,7 +186,7 @@ deepwiki/
 └── .env                  # Environment variables (create this)
 ```
 
-## 🤖 Provider-Based Model Selection System
+## Provider-Based Model Selection System
 
 DeepWiki now implements a flexible provider-based model selection system supporting multiple LLM providers:
 
@@ -261,7 +261,7 @@ The OpenAI Client's base_url configuration is designed primarily for enterprise 
 
 **Coming Soon**: In future updates, DeepWiki will support a mode where users need to provide their own API keys in requests. This will allow enterprise customers with private channels to use their existing API arrangements without sharing credentials with the DeepWiki deployment.
 
-## 🧩 Using OpenAI-Compatible Embedding Models (e.g., Alibaba Qwen)
+## Using OpenAI-Compatible Embedding Models (e.g., Alibaba Qwen)
 
 If you want to use embedding models compatible with the OpenAI API (such as Alibaba Qwen), follow these steps:
 
@@ -275,7 +275,7 @@ If you want to use embedding models compatible with the OpenAI API (such as Alib
 
 This allows you to seamlessly switch to any OpenAI-compatible embedding service without code changes.
 
-## 🧠 Using Google AI Embeddings
+## Using Google AI Embeddings
 
 DeepWiki now supports Google AI's latest embedding models as an alternative to OpenAI embeddings. This provides better integration when you're already using Google Gemini models for text generation.
 
@@ -394,7 +394,7 @@ docker-compose up
 
 **Logging Path Security Considerations:** In production environments, ensure the `api/logs` directory and any custom log file path are secured with appropriate filesystem permissions and access controls. The application enforces that `LOG_FILE_PATH` resides within the project's `api/logs` directory to prevent path traversal or unauthorized writes.
 
-## 🛠️ Advanced Setup
+## Advanced Setup
 
 ### Environment Variables
 
@@ -555,7 +555,7 @@ The API server provides:
 
 For more details, see the [API README](./api/README.md).
 
-## 🔌 OpenRouter Integration
+## OpenRouter Integration
 
 DeepWiki now supports [OpenRouter](https://openrouter.ai/) as a model provider, giving you access to hundreds of AI models through a single API:
 
@@ -577,7 +577,7 @@ OpenRouter is particularly useful if you want to:
 - Compare performance across different model providers
 - Optimize for cost vs. performance based on your needs
 
-## 🤖 Ask & DeepResearch Features
+## Ask & DeepResearch Features
 
 ### Ask Feature
 
@@ -602,7 +602,7 @@ DeepResearch takes repository analysis to the next level with a multi-turn resea
 
 To use DeepResearch, simply toggle the "Deep Research" switch in the Ask interface before submitting your question.
 
-## 📱 Screenshots
+## Screenshots
 
 ![DeepWiki Main Interface](screenshots/Interface.png)
 *The main interface of DeepWiki*
@@ -619,7 +619,7 @@ To use DeepResearch, simply toggle the "Deep Research" switch in the Ask interfa
 
 *Watch DeepWiki in action!*
 
-## ❓ Troubleshooting
+## Troubleshooting
 
 ### API Key Issues
 - **"Missing environment variables"**: Make sure your `.env` file is in the project root and contains the required API keys
@@ -642,17 +642,17 @@ To use DeepResearch, simply toggle the "Deep Research" switch in the Ask interfa
 2. **Check console logs**: Open browser developer tools to see any JavaScript errors
 3. **Check API logs**: Look at the terminal where the API is running for Python errors
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Feel free to:
 - Open issues for bugs or feature requests
 - Submit pull requests to improve the code
 - Share your feedback and ideas
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## ⭐ Star History
+## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=AsyncFuncAI/deepwiki-open&type=Date)](https://star-history.com/#AsyncFuncAI/deepwiki-open&Date)
