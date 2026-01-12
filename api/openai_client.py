@@ -203,18 +203,6 @@ class OpenAIClient(ModelClient):
             )
         return AsyncOpenAI(api_key=api_key, base_url=self.base_url)
 
-    # def _parse_chat_completion(self, completion: ChatCompletion) -> "GeneratorOutput":
-    #     # TODO: raw output it is better to save the whole completion as a source of truth instead of just the message
-    #     try:
-    #         data = self.chat_completion_parser(completion)
-    #         usage = self.track_completion_usage(completion)
-    #         return GeneratorOutput(
-    #             data=data, error=None, raw_response=str(data), usage=usage
-    #         )
-    #     except Exception as e:
-    #         log.error(f"Error parsing the completion: {e}")
-    #         return GeneratorOutput(data=None, error=str(e), raw_response=completion)
-
     def parse_chat_completion(
         self,
         completion: Union[ChatCompletion, Generator[ChatCompletionChunk, None, None]],
@@ -230,11 +218,11 @@ class OpenAIClient(ModelClient):
         try:
             usage = self.track_completion_usage(completion)
             return GeneratorOutput(
-                data=None, error=None, raw_response=data, usage=usage
+                data=data, error=None, raw_response=completion, usage=usage
             )
         except Exception as e:
             log.error(f"Error tracking the completion usage: {e}")
-            return GeneratorOutput(data=None, error=str(e), raw_response=data)
+            return GeneratorOutput(data=data, error=str(e), raw_response=completion)
 
     def track_completion_usage(
         self,
