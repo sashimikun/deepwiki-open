@@ -1,4 +1,4 @@
-# DeepWiki-Open
+☀️ # DeepWiki-Open
 
 ![DeepWiki Banner](screenshots/Deepwiki.png)
 
